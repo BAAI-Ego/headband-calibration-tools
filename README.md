@@ -1,149 +1,162 @@
-# Headband Calibration Tools
+# 头环四相机标定采集辅助工具
 
 
-Daily collection and Kalibr operation guide (Chinese Word): [open the guide](docs/头环四鱼眼相机标定采集流程_内置SD卡版_日常快速启动版本终版.docx). A [plain-text copy](docs/daily_workflow.zh-CN.txt) is also available.
-[English](README.md) | [简体中文](README.zh-CN.md)
+日常采集与 Kalibr 操作流程：[打开内置 SD 卡版终版 Word 文档](docs/头环四鱼眼相机标定采集流程_内置SD卡版_日常快速启动版本终版.docx)；另有[纯文本版](docs/daily_workflow.zh-CN.txt)。
+[English](README.en.md) | [简体中文](README.md)
 
-Collection assistance for four fisheye cameras, based on preview source v1.10.4. The tool displays live previews and Kalibr native AprilGrid evidence to help an operator position the target. Preview evidence does not guarantee calibration success.
+本工具用于四路实时预览、Kalibr原生角点证据与摆板提示。版本v1.10.4。预览不保证标定成功。以下是辅助工具的完整部署步骤，不自动运行相机、IMU或联合标定。
 
-## Where things are
+## 文件放在哪里
 
-| Location | What it contains |
+| 位置 | 内容与用途 |
 |---|---|
-| [README.md](README.md) / [README.zh-CN.md](README.zh-CN.md) | English / Chinese installation, Docker import, startup and troubleshooting steps. Start here on a new workstation. |
-| [Daily collection guide](docs/头环四鱼眼相机标定采集流程_内置SD卡版_日常快速启动版本终版.docx) / [text copy](docs/daily_workflow.zh-CN.txt) | Chinese operator procedure: first-time headband setup, SD-card recording, transfer and Kalibr checks. The headband IP and BAG names are examples to change for each device. |
-| [docs/](docs/) | Additional quick start, validation notes, and operator guide. |
-| [preview/](preview/) | Four-camera preview launcher, Python relay/probe, web display and target configuration. The `output/` directory is generated during use. |
-| [tools/](tools/) | Environment check, Docker image export, and preview report packaging scripts. |
-| [v1.10.4 Release](https://github.com/BAAI-Ego/headband-calibration-tools/releases/tag/v1.10.4) | Full deployment tar with the Docker image, plus its SHA256 file. These files are downloaded separately from Git source. |
+| [README.en.md](README.en.md) / [README.md](README.md) | 英文／中文部署说明。新电脑先读中文 README，按步骤准备 Docker、导入镜像并启动预览。 |
+| [日常采集流程 Word](docs/头环四鱼眼相机标定采集流程_内置SD卡版_日常快速启动版本终版.docx) / [纯文本版](docs/daily_workflow.zh-CN.txt) | 标定员的实际操作：新头环首次设置、SD 卡录制、传输 BAG 和 Kalibr 验证。头环 IP 与 BAG 名只是示例，换设备时按现场修改。 |
+| [docs/](docs/) | 快速启动、验证说明及日常流程。 |
+| [preview/](preview/) | 四路预览启动脚本、Python 中继与角点探针、网页界面及标定板配置。`output/` 在运行时生成。 |
+| [tools/](tools/) | 环境检查、Docker 镜像导出、预览报告打包脚本。 |
+| [v1.10.4 Release](https://github.com/BAAI-Ego/headband-calibration-tools/releases/tag/v1.10.4) | 带 Docker 镜像的完整部署包和 SHA256 校验文件，须从 Releases 单独下载。 |
 
-Use the **Code** tab to browse these folders. Use **Releases** on the right to download the full deployment package. The daily guide covers collection and Kalibr operation; this README covers installation and use of the preview assistant.
+在仓库顶部的 **Code** 页点击文件夹查看源码和文档；在页面右侧的 **Releases** 下载完整包。日常流程文档讲采集与 Kalibr 操作，本 README 讲新电脑部署与辅助预览工具。
 
-## Before you start: what to obtain
+## 开始前：需要获取什么
 
-| Item | Where | Purpose |
+| 要获取的东西 | 从哪里获取 | 用途 |
 |---|---|---|
-| This repository's `main` branch | **Code** tab or the clone command below | Current guides, daily workflow, preview source and helper scripts |
-| Full `.tar` and matching `.tar.sha256` | [v1.10.4 Release Assets](https://github.com/BAAI-Ego/headband-calibration-tools/releases/tag/v1.10.4) | Approximately 1.5 GiB Kalibr Docker image and download verification |
+| `headband-calibration-tools` 仓库的 `main` 分支 | 本页的 **Code** 或下文克隆命令 | 最新中英文说明、`docs/` 日常流程、`preview/` 工具源码、`tools/` 检查脚本 |
+| 完整包 `.tar` 和对应的 `.tar.sha256` | [v1.10.4 Release 的 Assets](https://github.com/BAAI-Ego/headband-calibration-tools/releases/tag/v1.10.4) | 获取约 1.5 GiB 的 Kalibr Docker 镜像并校验下载完整性 |
 
-Get both items. GitHub's automatic **Source code ZIP omits the image**. This is a private repository; your account needs read access. Follow the numbered sections on a **Linux workstation** unless a command explicitly says headband terminal. Each comment describes the command immediately below it. Stop and resolve any failed step before proceeding.
+两处内容都需要获取。GitHub 自动生成的 **Source code ZIP 不含 Docker 镜像**。本仓库为私有仓库，账号须有读取权限。以下按新工作站首次部署的顺序写，命令均在 **Linux 工作站** 执行，除非特别标注“头环终端”。每条注释说明紧跟的命令；按小节执行，遇到失败先停下处理。
 
-## Step 1: Prepare the workstation
+## 第一步：准备工作站
 
-Use Ubuntu/Debian x86_64 with network access. Allow roughly 20 GB for download, extraction and Docker image layers. The headband must already have its original camera drivers and ROS environment.
+适用 Ubuntu/Debian、x86_64。工作站应有可用网络，下载、解压和 Docker 镜像层建议预留至少 20 GB。头环应已具备原相机驱动和 ROS 环境。
 
 ```bash
-# Workstation: verify x86_64 (the image is linux/amd64).
+# 工作站：确认是 x86_64（镜像仅适用于 linux/amd64）。
 uname -m
-# Workstation: inspect space; allow roughly 20 GB for archive, extraction and image layers.
+# 工作站：查看下载目录和 Docker 存储空间；建议预留至少 20 GB。
 df -h "$HOME" /var/lib
-# Workstation: update the package index.
+# 工作站：刷新系统软件包索引。
 sudo apt-get update
-# Workstation: install Git, GitHub CLI, SSH and network utilities.
+# 工作站：安装 Git、GitHub CLI、SSH 和网络检查工具。
 sudo apt-get install -y git gh openssh-client python3 unzip rsync arp-scan netcat-openbsd
 ```
 
-## Step 2: Clone the main branch
+## 第二步：克隆工具仓库的 main 分支
 
-Sign in to `gh` for this private repository if needed. Do not overwrite an existing clone.
+首次在私有仓库使用 `gh` 时先登录。已有克隆目录时，先检查本地修改，勿覆盖。
 
 ```bash
-# Workstation: check login; if signed out, run the interactive command below.
+# 工作站：查看 GitHub 登录状态；如未登录，运行下一条交互命令。
 gh auth status
 ```
 
-Only if the check reports that you are signed out:
+如果显示未登录，再执行：
 
 ```bash
-# Workstation: authorize GitHub CLI in the browser.
+# 工作站：在浏览器完成 GitHub 授权。
 gh auth login
 ```
 
-Then continue:
+然后继续：
 
 ```bash
-# Workstation: enter your home directory; do not overwrite an existing clone.
+# 工作站：进入个人目录；下面的 clone 会创建新目录，已有目录时请先核对。
 cd "$HOME"
-# Workstation: clone the main branch of the dedicated repository.
+# 工作站：克隆独立工具仓库的 main 分支。
 gh repo clone BAAI-Ego/headband-calibration-tools -- --branch main
-# Workstation: enter the source directory.
+# 工作站：进入源码目录；后续工具命令从这里执行。
 cd "$HOME/headband-calibration-tools"
-# Workstation: confirm the main branch.
+# 工作站：确认当前分支为 main。
 git branch --show-current
-# Workstation: check that both guides are in the repository root.
-ls -l README.md README.zh-CN.md
+# 工作站：确认两份 README 都在仓库根目录。
+ls -l README.en.md README.md
 ```
 
-If `~/headband-calibration-tools` already exists, inspect `git status` there and use `git pull --ff-only` only after confirming it has no local changes.
+已有 `~/headband-calibration-tools` 时不要重复克隆；进入目录运行 `git status`，确认无本地修改后使用 `git pull --ff-only` 更新。
 
-## Step 3: Download and verify the image assets
+## 第三步：下载并校验镜像附件
 
-Download both assets from the Release; the source is already cloned in step 2. The commands below can be used instead of clicking Assets in the browser.
+Release 页面下载的是完整包与校验文件，共两个附件；源码已在第二步克隆。以下命令也可代替在网页手动点击 Assets。
 
 ```bash
-# Workstation: create a separate download directory.
+# 工作站：创建专门的下载目录。
 mkdir -p "$HOME/Downloads/headband-v1.10.4"
-# Workstation: download both release assets into it.
+# 工作站：下载完整部署包和 SHA256 文件；如网络中断，检查目录后重试。
 gh release download v1.10.4 --repo BAAI-Ego/headband-calibration-tools --dir "$HOME/Downloads/headband-v1.10.4" --pattern 'headband-calibration-assistant-v1.10.4-full.tar*'
-# Workstation: enter the download directory.
+# 工作站：进入附件目录，两份附件必须同时存在。
 cd "$HOME/Downloads/headband-v1.10.4"
-# Workstation: check both asset names and sizes.
+# 工作站：核对下载的文件名与大小。
 ls -lh headband-calibration-assistant-v1.10.4-full.tar*
-# Workstation: verify the tar checksum; stop on mismatch.
+# 工作站：校验完整包；失败时停止，不要解压或导入。
 sha256sum -c headband-calibration-assistant-v1.10.4-full.tar.sha256
-# Workstation: extract into this directory; check before proceeding if the folder already exists.
+# 工作站：解压到当前目录；已有同名解压目录时先停止并核对。
 tar -xf headband-calibration-assistant-v1.10.4-full.tar
-# Workstation: verify all internal files, including the image archive.
+# 工作站：进入解压目录，校验内部文件（包含环境镜像）。
 cd headband-calibration-assistant-v1.10.4-full
 sha256sum -c SHA256SUMS
 ```
 
-The assets are `headband-calibration-assistant-v1.10.4-full.tar` and `.tar.sha256`. The archive is a release snapshot and its bundled README has older filenames. **Use the current README and operator guide from the cloned `main` branch.** The archive provides `environment/kalibr-environment.tar.gz` for import.
+Release 附件名为 `headband-calibration-assistant-v1.10.4-full.tar` 和 `headband-calibration-assistant-v1.10.4-full.tar.sha256`。该归档是发布时快照，内含旧版 README 文件名；**后续操作以刚克隆的 `main` 上的 README 和日常流程文档为准**。归档主要用于导入 `environment/kalibr-environment.tar.gz`。
 
-## Step 4: Install Docker and import the Kalibr image
+## 第四步：安装 Docker 并导入 Kalibr 镜像
 
-Keep an existing Docker installation. Resolve `docker info` permission errors with the workstation administrator and log in again before proceeding. If `kalibr:noetic` already points to a different image, investigate before changing its tag.
+若系统已有 Docker，保留现有安装。若 `docker info` 报权限错误，应由管理员配置当前用户权限并重新登录，再继续。若已有名为 `kalibr:noetic` 的不同镜像，先核对用途，避免导入时改写旧标签。
 
 ```bash
-# Workstation: install and start docker.io only when Docker is absent; do not mix it with Docker CE.
+# 工作站：仅在 Docker 命令不存在时安装 docker.io 并启动服务；不要与已有 Docker CE 混装。
 if ! command -v docker >/dev/null; then sudo apt-get install -y docker.io; sudo systemctl start docker; fi
-# Workstation: confirm the current user can use Docker directly.
+# 工作站：确认当前用户可以直接调用 Docker；失败时先解决权限。
 docker info
-# Workstation: inspect any existing tag; a missing-image error is acceptable, but stop if the ID differs.
+# 工作站：检查现有 kalibr:noetic 镜像；不存在时会报错，可继续；若 ID 不同须先核对，不能直接覆盖标签。
 docker image inspect kalibr:noetic --format '{{.Id}} {{.Os}}/{{.Architecture}}'
-# Workstation: inspect the expected image identity and platform.
+# 工作站：查看附件镜像记录的 ID 与平台。
 cat environment/image-id-platform.txt
-# Workstation: verify the image archive again.
+# 工作站：再次核验镜像压缩包。
 (cd environment && sha256sum -c SHA256SUMS)
-# Workstation: import only after resolving any different pre-existing kalibr:noetic tag.
+# 工作站：确认同名标签不存在或经管理员确认可导入后，导入镜像。
 docker load -i environment/kalibr-environment.tar.gz
-# Workstation: confirm the imported image identity and platform.
+# 工作站：检查导入后的镜像 ID 与平台。
 docker image inspect kalibr:noetic --format '{{.Id}} {{.Os}}/{{.Architecture}}'
-# Workstation: return to the current source repository.
+# 工作站：返回当前 main 的源码目录。
 cd "$HOME/headband-calibration-tools"
-# Workstation: check local dependencies without connecting to the headband.
+# 工作站：运行不连接头环的本地依赖检查。
 bash tools/check_preview_environment.sh
 ```
 
-Expected image ID: `sha256:ddbe45d2bd03e8a415688355dc23c4ceedf6eb576e1c6d7eeafa51567fa10b29`, platform `linux/amd64`. Expected dependency result: `DEPENDENCIES_PASS`. The administrator should decide whether to grant Docker group access, which carries elevated privileges. No host ROS install is needed; do not replace compiled Kalibr bindings with pip.
+导入镜像后应看到 ID `sha256:ddbe45d2bd03e8a415688355dc23c4ceedf6eb576e1c6d7eeafa51567fa10b29`、`linux/amd64`，依赖检查应出现 `DEPENDENCIES_PASS`。docker 组有较高系统权限，应由管理员决定是否使用。宿主机无需另装 ROS，也不要通过 pip 替换镜像内编译好的 Kalibr 依赖。
 
-Next, follow step 5 to identify the actual headband IP and inspect all four image topics, then run a 60-second preview in step 6. The SSH relay adds load; it does not start the original BAG recording.
+接下来按第五步检查头环和四路 Topic，再按第六步先运行 60 秒预览。启动预览会通过 SSH 在头环临时运行中继并增加负载，不自动运行原 BAG 录制。
 
-## Step 5: Find and check the headband
+## 第五步：找到并检查头环
 
-The headband must already have ROS Noetic, OpenCV, NumPy, and the original four-camera service/driver. This package does not install headband firmware. Connect one headband at a time. Replace the interface, subnet, and IP below with actual values.
+工作站执行，eno1与网段按现场实际值修改；一次只连接一台头环：
 
 ```bash
-# Linux workstation
 sudo arp-scan --interface=eno1 192.168.10.0/24
-# Verify the device's SSH fingerprint before accepting it.
+# 修改实际头环IP；确认设备SSH指纹
 ssh orangepi@192.168.10.109
 ```
 
+出现REMOTE HOST IDENTIFICATION HAS CHANGED时，先在头环本地核对指纹，确认后才删除旧记录：
+
 ```bash
-# Headband terminal
+# 头环本地终端
+sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+# 工作站终端，核验后执行，IP按实际修改
+ssh-keygen -f "$HOME/.ssh/known_hosts" -R 192.168.10.109
+```
+
+22端口拒绝连接时，需固件维护者做首次本地SSH/相机服务设置，不是预览软件故障。原流程中的enable/restart服务、SD卡写测试属于明确的一次性操作；不混入只读检查。
+
+SSH进入头环后：
+
+```bash
+# 头环终端，只检查现有环境
 source /opt/ros/noetic/setup.bash
 export ROS_MASTER_URI=http://localhost:11311
+python3 -c 'import rospy,cv2,numpy; from sensor_msgs.msg import CompressedImage; print("HEADBAND_DEPENDENCIES_PASS")'
 systemctl is-active seeker_cam_bridge.service
 for TOPIC in /fisheye/left/image_raw/compressed /fisheye/right/image_raw/compressed /fisheye/bright/image_raw/compressed /fisheye/bleft/image_raw/compressed; do
   if timeout 8 rostopic echo -n 1 "$TOPIC" >/dev/null; then
@@ -155,118 +168,69 @@ done
 exit
 ```
 
-All four topics must pass. The checks briefly subscribe to image messages and add temporary load. SSH connectivity alone does not prove bidirectional ROS connectivity.
+检查会短时订阅图像并增加负载。四路应PASS。头环IP不能固定写死；SSH通不代表ROS双向网络可达。不要为了预览关闭防火墙或更改相机分辨率。
 
-## Step 6: Start the assistant
+## 第六步：核对板配置并启动预览
 
-Linux workstation, full package root:
+preview/config/april_6x6.yaml参考值为6×6、tagSize=0.088m、tagSpacing=0.3。实测黑边长a、白缝b应对应tagSize=a、tagSpacing=b/a。确认本次板后配置，不覆盖历史YAML。
+
+工作站、本包根目录执行；两个IP按实际修改：
 
 ```bash
 cd preview
-# Arguments: actual headband IP, workstation wired IP, preview profile
+# 头环IP 工作站有线IP 档位 自动结束秒数
+bash run_temporary_four_preview.sh 192.168.10.109 192.168.10.10 balanced 60
+```
+
+浏览器打开http://127.0.0.1:8766。默认单行BRIGHT、RIGHT、LEFT、BLEFT。balanced宽640、目标5FPS，不是录制频率。首次先做60秒验收；正式人工结束模式省略第四参数：
+
+```bash
 bash run_temporary_four_preview.sh 192.168.10.109 192.168.10.10 balanced
 ```
 
-Open http://127.0.0.1:8766 in a browser. Default order: BRIGHT, RIGHT, LEFT, BLEFT in one row. The balanced profile targets 5 preview FPS at width 640; this is not the camera recording frequency. An optional fourth argument of 60–900 sets an automatic stop time; omitted or zero means manual stop.
+启动会通过SSH在头环临时运行中继，订阅原图、缩放压缩，增加负载，不写持久程序或改驱动。不要同时启动多个实例。未观察到144/144只能表示低清证据不足。
 
-Starting the assistant runs a temporary Python relay on the headband over SSH, subscribes to original images, resizes and recompresses them, and adds load. It does not install software or change persistent headband configuration, camera drivers, or the recording command. Do not start multiple instances.
+## 第七步：结束、保存报告与正式录制
 
-Verify the physical target before use. `preview/config/april_6x6.yaml` is a reference: 6×6 tags, tagSize 0.088 m, tagSpacing 0.3. Do not overwrite historical or production configurations.
-
-## Step 7: Stop and package the report
-
-Press Ctrl+C in the preview terminal and wait for exit. After the report is saved:
+人工模式在预览终端Ctrl+C，等待退出。确认JSON报告已保存后：
 
 ```bash
-# Still in preview/
+# 当前仍在preview目录
 bash ../tools/package_preview_report.sh
 ```
 
-Reports are written under `preview/output/`. A network interruption may prevent remote cleanup; verify the relay state if an abnormal exit occurs. Record the original BAG independently, finish rosbag normally, verify transfer checksums, and run Kalibr on an isolated copy.
+报告在preview/output。网络中断时清理可能不完整，应核对本次中继，不能默认退出即远端清理成功。文件权限问题应检查输出目录所有权，不对整个工程chmod 777。
 
-## Contents and scope
-
-- `preview/`: preserved v1.10.4 source, UI, target and evidence policy.
-- `tools/`: local dependency check, image export, report packaging.
-- `docs/`: original workflow, detailed deployment notes and release review.
-
-Offline scan wrappers retain historical workstation paths and a 20 Hz sampling setting. They need explicit review before use on another workstation and are not equivalent to a 10 Hz calibration run. Camera-IMU and IMU setup are separate from live preview deployment.
-
-## Validation and provenance
-
-The image was exported and checksum-verified on the original workstation. Platform: linux/amd64. Image ID: `sha256:ddbe45d2bd03e8a415688355dc23c4ceedf6eb576e1c6d7eeafa51567fa10b29`.
-
-Packaging checks covered Python and Shell syntax. Deployment on another workstation and a new hardware acceptance run have not been completed. The full package README is Chinese; this repository README provides the English quick start. Original source did not include a tool license; the rights holder must determine the appropriate license before claiming an open-source license. Third-party software retains its own licensing requirements.
-
-## Installation and recovery notes
-
-### Docker permissions
-If Docker is already installed, keep it; do not reinstall or mix distribution docker.io packages with Docker CE packages. On a dedicated workstation, an administrator may grant access as follows. Membership in the docker group grants root-equivalent access; use only where the administrator approves it.
+原rosbag录制独立执行。头环先确认SD卡挂载/空间：
 
 ```bash
-sudo groupadd --force docker
-sudo usermod -aG docker "$USER"
-# Fully log out and log back in, then run:
-docker info
-```
-
-Official reference: https://docs.docker.com/engine/install/linux-postinstall/ . The exported image already includes ROS and Kalibr bindings: do not install ROS on the host or use pip to replace these bindings.
-
-### Downloads and network
-Download both named attachments from the Release Assets section, not the automatic Source code archive. For a private repository, sign in with an account that has read access. Use an empty deployment directory. Ensure adequate free space for the 1.5 GiB archive, extracted image and Docker layers (20 GiB free is a conservative preparation recommendation, not a measured requirement).
-
-```bash
-# Workstation checks
-uname -m
-df -h "$HOME" /var/lib/docker
-ip -br addr
-ip route
-```
-
-Expected architecture: x86_64. Change eno1, network range and both IPs to the actual deployment values. Headband IP is not fixed. The workstation and headband must reach each other's ROS endpoints, not only SSH port 22. Do not disable the firewall or alter camera resolution to work around missing previews.
-
-### SSH host identity and first-time headband setup
-If SSH reports a changed key, verify the current headband's local fingerprint before removing the old record:
-
-```bash
-# Headband local terminal
-sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
-# Workstation, only after verifying identity; replace the IP
-ssh-keygen -f "$HOME/.ssh/known_hosts" -R 192.168.10.109
-```
-
-If port 22 refuses connections, first-time setup may be required. A firmware maintainer must confirm the existing SSH and camera service configuration locally. This package does not install the driver or configure SD automount; do not claim it provisions a blank headband. Service enable/restart and SD write tests in the original workflow are explicit first-time actions, not part of read-only checking.
-
-### Errors encountered during packaging
-- `No such file`: the ZIP/script was not downloaded, has a duplicate filename, or the path is wrong. Verify with `ls` before running it; a sandbox link is not a workstation path.
-- Terminal shows `>`: a pasted quote or heredoc is unfinished. Ctrl+C cancels the pending input. Use the packaged scripts rather than a long pasted script.
-- `NameError: 本地依赖导入通过`: an earlier packaging script had a quoting error. The published check uses a Python heredoc and `DEPENDENCIES_PASS`. Do not fix this by installing packages.
-- GDK connection or empty rosdep-view warnings occurred during the original import checks. A subsequent traceback still means failure; warnings alone do not prove failure or success. Do not initialize rosdep or start a GUI solely to suppress these messages.
-- `aslam_cv` or other imports fail: verify image identity and setup scripts. Stop instead of replacing compiled bindings with pip packages.
-- `kalibr:noetic` missing: load the Release image. Preview uses the image with a temporary container; it does not require creating a permanent container named kalibr.
-- Port 8766 unavailable: inspect `ss -ltnp | grep ':8766'`; end only the confirmed old preview instance.
-- Permission denied in preview/output: use a user-writable extraction directory. Container-generated reports may have different ownership; have the administrator inspect that directory rather than chmod 777 the whole project.
-- Checksum failure: stop and redownload the relevant attachment. Do not import a mismatched image.
-
-### Recording and calibration are separate
-The preview deployment does not automatically launch rosbag or Kalibr calibration. For an SD recording, first verify the mount and free space in the headband terminal:
-
-```bash
+# 头环终端
 findmnt -no SOURCE,TARGET,FSTYPE /media/orangepi/sdcard
 df -h /media/orangepi/sdcard
 ```
 
-Use a new BAG name, normal Ctrl+C once and wait for the headband prompt before sync/transfer. Check rosbag info and source/destination SHA256. Recovery works on a copy: .orig.bag is normally the unindexed backup. A successful reindex may still leave a short or mismatched BAG. Verify all four topic names, CompressedImage type and image decoding. DLT point-count failures and low preview evidence are not hardware fault diagnoses.
+每次新BAG名，正常Ctrl+C一次并等回提示符，再rosbag info、sync、传输、双端SHA256。原命令在docs/头环四鱼眼相机标定采集流程_内置SD卡版_日常快速启动版本终版.docx；不改变原录制。对副本做恢复，.orig.bag通常是未索引备份。reindex成功不代表完整：还需核对时长、四路CompressedImage类型及解码。5.2秒恢复文件、Topic不匹配与DLT点数不足不能当作硬件故障结论。
 
-The source workflow includes separate Camera and Camera-IMU examples. DS outputs are isolated; the joint step must explicitly use the actual DS camchain path. Do not assume it appears in the production camera directory. Camera uses its explicitly selected sampling frequency; the recorded joint template uses 5 Hz and --cams. Joint calibration requires a dynamic Camera-IMU BAG and imu.yaml, neither supplied by this deployment package.
+正式Kalibr仍用独立副本，检查误差和内外参。DS输出在独立测试目录，第三步必须明确指定真实camchain，不能认为自动出现在camera目录。Camera与Camera-IMU分开；第三步模板5Hz、--cams，另需动态Camera-IMU BAG与imu.yaml，本部署包不提供。
 
-## Acceptance checklist
+## 第八步：常见问题
 
-1. Verify archive/image checksums and image ID; pass dependency imports.
-2. Confirm actual IPs, existing headband dependencies and four topic messages.
-3. Run a 60-second preview: continuous four views, completed native probes and no unexplained errors.
-4. Save the report and confirm normal relay cleanup.
-5. Verify original recording remains normal while the preview is running; review BAG timing/decoding separately.
-6. Run official Kalibr on an isolated BAG copy and review residuals/parameters. Output files and exit 0 establish completion, not quality approval.
+| 现象 | 处理 |
+|---|---|
+| 文件不存在 | 先确认文件已下载、真实文件名/路径；聊天链接不是工作站路径。 |
+| 终端一直显示 > | 引号或heredoc没结束，Ctrl+C取消；用脚本文件，避免长段粘贴。 |
+| NameError 本地依赖导入通过 | 旧检查脚本引号错误，现版使用Python heredoc；不靠安装软件修复。 |
+| GDK连接失败/rosdep view empty | 检查是否有后续Traceback及退出码；警告本身不证明通过，不为消警告盲目rosdep init或启动GUI。 |
+| aslam_cv等导入失败 | 核对镜像ID、setup.bash，停止并核实环境，不pip替换绑定。 |
+| 缺少kalibr:noetic | 导入Release中的实际镜像；不等于需要启动原kalibr容器。 |
+| docker权限不足 | 按第四步由管理员配置，重新登录。 |
+| SSH通但无视频 | 查实际IP、ROS双向可达、Topic和服务；不是只检查22端口。 |
+| 8766占用 | ss -ltnp检查，只停止确认属于旧预览的进程。 |
+| 校验值不一致 | 停止导入，重新下载对应附件。 |
+| 上传GitHub中断 | 不重复提交源码；先查看main与Release Assets，按缺失附件续传。 |
 
-This checklist has not been completed on a new workstation. Report actual platform, date, image ID and observed results before marking deployment accepted.
+## 第九步：发布状态与验收
+
+原工作站镜像导出及SHA256已通过；Python/Shell语法检查完成。未做新工作站完整验收，不承诺下载后必然标定成功。另一工作站应记录平台、镜像ID、日期、四路视频连续性、探针完成/异常、报告保存、正常退出清理、并行录制及独立Kalibr质量检查。
+
+离线扫描原脚本含历史路径及20Hz取样，不等同当前10Hz标定，迁移前核对。工具许可证由权利人确认，第三方许可保留。
