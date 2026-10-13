@@ -6,24 +6,37 @@ Daily collection and Kalibr operation guide (Chinese Word): [open the guide](doc
 
 Collection assistance for four fisheye cameras, based on preview source v1.10.4. The tool displays live previews and Kalibr native AprilGrid evidence to help an operator position the target. Preview evidence does not guarantee calibration success.
 
+## Where things are
+
+| Location | What it contains |
+|---|---|
+| [README.md](README.md) / [README.zh-CN.md](README.zh-CN.md) | English / Chinese installation, Docker import, startup and troubleshooting steps. Start here on a new workstation. |
+| [Daily collection guide](docs/头环四鱼眼相机标定采集流程_内置SD卡版_日常快速启动版本终版.docx) / [text copy](docs/daily_workflow.zh-CN.txt) | Chinese operator procedure: first-time headband setup, SD-card recording, transfer and Kalibr checks. The headband IP and BAG names are examples to change for each device. |
+| [docs/](docs/) | Additional quick start, validation notes, and operator guide. |
+| [preview/](preview/) | Four-camera preview launcher, Python relay/probe, web display and target configuration. The `output/` directory is generated during use. |
+| [tools/](tools/) | Environment check, Docker image export, and preview report packaging scripts. |
+| [v1.10.4 Release](https://github.com/BAAI-Ego/headband-calibration-tools/releases/tag/v1.10.4) | Full deployment tar with the Docker image, plus its SHA256 file. These files are downloaded separately from Git source. |
+
+Use the **Code** tab to browse these folders. Use **Releases** on the right to download the full deployment package. The daily guide covers collection and Kalibr operation; this README covers installation and use of the preview assistant.
+
 ## Download
 
 This Git folder contains the source, configuration, helper scripts, and documentation. It does **not** contain the Docker image.
 
 For deployment, download these two attachments from the [full deployment release](https://github.com/BAAI-Ego/headband-calibration-tools/releases/tag/v1.10.4):
 
-- `headband-calibration-assistant-v1.10.4-full-v2.tar` — approximately 1.6 GB; source, Docker environment, configuration, and deployment README in one package.
-- `headband-calibration-assistant-v1.10.4-full-v2.tar.sha256` — checksum of the full package.
+- `headband-calibration-assistant-v1.10.4-full.tar` — approximately 1.6 GB; source, Docker environment, configuration, and deployment README in one package.
+- `headband-calibration-assistant-v1.10.4-full.tar.sha256` — checksum of the full package.
 
-The full package is distributed as a Release attachment because the environment image is too large for a normal Git commit. Downloading GitHub's automatically generated source archive does not include this image. The link becomes available when the accompanying upload script successfully publishes the release.
+The full package is distributed as a Release attachment because the environment image is too large for a normal Git commit. Downloading GitHub's automatically generated source archive does not include this image. The v1.10.4 release is published; use the exact asset names above.
 
 ## 1 Verify and extract
 
 Linux workstation, in the directory containing both downloaded attachments:
 
 ```bash
-sha256sum -c headband-calibration-assistant-v1.10.4-full-v2.tar.sha256
-tar -xf headband-calibration-assistant-v1.10.4-full-v2.tar
+sha256sum -c headband-calibration-assistant-v1.10.4-full.tar.sha256
+tar -xf headband-calibration-assistant-v1.10.4-full.tar
 cd headband-calibration-assistant-v1.10.4-full
 sha256sum -c SHA256SUMS
 ```

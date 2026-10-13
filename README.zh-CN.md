@@ -6,16 +6,29 @@
 
 本工具用于四路实时预览、Kalibr原生角点证据与摆板提示。版本v1.10.4。预览不保证标定成功。以下是辅助工具的完整部署步骤，不自动运行相机、IMU或联合标定。
 
+## 文件放在哪里
+
+| 位置 | 内容与用途 |
+|---|---|
+| [README.md](README.md) / [README.zh-CN.md](README.zh-CN.md) | 英文／中文部署说明。新电脑先读中文 README，按步骤准备 Docker、导入镜像并启动预览。 |
+| [日常采集流程 Word](docs/头环四鱼眼相机标定采集流程_内置SD卡版_日常快速启动版本终版.docx) / [纯文本版](docs/daily_workflow.zh-CN.txt) | 标定员的实际操作：新头环首次设置、SD 卡录制、传输 BAG 和 Kalibr 验证。头环 IP 与 BAG 名只是示例，换设备时按现场修改。 |
+| [docs/](docs/) | 快速启动、验证说明及日常流程。 |
+| [preview/](preview/) | 四路预览启动脚本、Python 中继与角点探针、网页界面及标定板配置。`output/` 在运行时生成。 |
+| [tools/](tools/) | 环境检查、Docker 镜像导出、预览报告打包脚本。 |
+| [v1.10.4 Release](https://github.com/BAAI-Ego/headband-calibration-tools/releases/tag/v1.10.4) | 带 Docker 镜像的完整部署包和 SHA256 校验文件，须从 Releases 单独下载。 |
+
+在仓库顶部的 **Code** 页点击文件夹查看源码和文档；在页面右侧的 **Releases** 下载完整包。日常流程文档讲采集与 Kalibr 操作，本 README 讲新电脑部署与辅助预览工具。
+
 ## 1 下载完整包
 
 打开Release：
 https://github.com/BAAI-Ego/headband-calibration-tools/releases/tag/v1.10.4
 
 在Assets下载两个文件到同一目录：
-- headband-calibration-assistant-v1.10.4-full-v2.tar，约1.6GB，包含源码、环境镜像、配置及中英README。
-- headband-calibration-assistant-v1.10.4-full-v2.tar.sha256，完整包校验值。
+- headband-calibration-assistant-v1.10.4-full.tar，约1.6GB，包含源码、环境镜像、配置及中英README。
+- headband-calibration-assistant-v1.10.4-full.tar.sha256，完整包校验值。
 
-Git仓库和自动Source code下载不含镜像。私有仓库需要有读取权限的账号。该新Release由配套更新脚本成功执行后创建，旧版Release保留。
+Git仓库和自动Source code下载不含镜像。私有仓库需要有读取权限的账号。新仓库 Release v1.10.4 已发布；以页面上的附件名为准。
 
 ## 2 准备Linux工作站
 
@@ -56,8 +69,8 @@ docker info
 在两个下载附件所在目录执行。已有同名解压目录时换空目录，避免覆盖。
 
 ```bash
-sha256sum -c headband-calibration-assistant-v1.10.4-full-v2.tar.sha256
-tar -xf headband-calibration-assistant-v1.10.4-full-v2.tar
+sha256sum -c headband-calibration-assistant-v1.10.4-full.tar.sha256
+tar -xf headband-calibration-assistant-v1.10.4-full.tar
 cd headband-calibration-assistant-v1.10.4-full
 sha256sum -c SHA256SUMS
 
