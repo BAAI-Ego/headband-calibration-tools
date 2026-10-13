@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+preview/output/
+*.bag
+*.bag.active
+*.orig.bag
+*.mp4
+*.avi
+*.log
+.venv/
+kalibr-environment*/
+
+environment/
+*.tar
+*.tar.gz

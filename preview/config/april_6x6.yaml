@@ -1,0 +1,7 @@
+# Existing reference only. Do not replace historical or production target YAML
+# until black-tag edge length and white inter-tag spacing have been measured.
+target_type: 'aprilgrid'
+tagCols: 6
+tagRows: 6
+tagSize: 0.088
+tagSpacing: 0.3

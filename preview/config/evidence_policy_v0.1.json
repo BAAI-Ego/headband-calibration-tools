@@ -1,0 +1,41 @@
+{
+  "schema": "kalibr-acquisition-evidence-policy-v0.1",
+  "scope": "Collection assistance only; does not decide Kalibr acceptance.",
+  "hard_boundaries": {
+    "red_is_only_for": ["preview_stream_missing", "preview_stream_stale"],
+    "not_observed_means": "uncertain_not_failure",
+    "final_acceptance": "unchanged_official_kalibr_and_reprojection_validation"
+  },
+  "official_or_source_backed_evidence": {
+    "per_camera": [
+      "kalibr_native_image_grid_point_presence",
+      "complete_grid_candidate_144_corners",
+      "positive_focal_initializer_evidence_when_available"
+    ],
+    "multi_camera": [
+      "all_four_original_topics_present",
+      "pairwise_observation_graph_connected"
+    ]
+  },
+  "empirical_evidence_to_measure_from_historical_bags": {
+    "per_camera": [
+      "complete_grid_candidate_count",
+      "image_plane_coverage_cells",
+      "relative_board_scale_bins",
+      "relative_board_tilt_bins"
+    ],
+    "multi_camera": [
+      "pairwise_co_observation_episodes",
+      "observation_graph_edges"
+    ]
+  },
+  "prompt_priority": [
+    "stream_health",
+    "missing_complete_grid_candidate",
+    "missing_image_plane_coverage",
+    "missing_scale_or_tilt_diversity",
+    "missing_pairwise_connection",
+    "continue_diverse_collection"
+  ],
+  "threshold_status": "No counts, durations, grid-bin quotas, or pose-bin quotas are acceptance thresholds until read-only replay of CP-0001/0004/0007 and CP-0005/0006 establishes documented empirical ranges."
+}

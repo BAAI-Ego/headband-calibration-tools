@@ -1,0 +1,12 @@
+Python syntax OK preview/scripts/headband_relay.py
+Python syntax OK preview/scripts/kalibr_probe_worker.py
+Python syntax OK preview/scripts/linux_viewer.py
+Python syntax OK preview/scripts/kalibr_preview_probe.py
+Python syntax OK preview/scripts/kalibr_bag_native_evidence_scan.py
+Bash syntax OK tools/check_preview_environment.sh
+Bash syntax OK tools/export_kalibr_environment.sh
+Bash syntax OK tools/package_preview_report.sh
+Bash syntax OK preview/run_historical_camera_overlap_scan.sh
+Bash syntax OK preview/run_temporary_four_preview.sh
+Bash syntax OK preview/run_readonly_bag_evidence_scan.sh
+没有运行Docker或头环实测。

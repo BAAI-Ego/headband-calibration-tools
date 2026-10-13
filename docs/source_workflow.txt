@@ -1,0 +1,747 @@
+头环四鱼眼相机标定采集流程_内置SD卡版_日常快速启动版本终版
+
+头环四鱼眼相机标定采集流程 内置 SD 卡版
+
+快速启动版本 3
+
+适用范围：四路相机 camera 标定。流程分为“新头环首次初始化”和“Linux 日常采集”两部分。
+
+黄色内容是换头环或新录制时才需要修改的值。示例头环 IP 为 192.168.10.109，必须以扫描结果为准。
+
+固定信息
+
+项目
+
+固定值或规则
+
+工作站有线 IP
+
+192.168.10.10
+
+路由器 LAN
+
+192.168.10.1
+
+BAG 保存目录
+
+/media/orangepi/sdcard/data/kalibr_bags
+
+ROS Master
+
+头环本机 http://localhost:11311
+
+固定 Topic 顺序
+
+LEFT, RIGHT, BRIGHT, BLEFT
+
+一 新头环从 0 到 1 仅第一次需要显示器
+
+当新头环扫描到 IP，但 Linux 无法 SSH 或 22 端口拒绝连接时，接一次显示器和键盘。完成本节、重启并在 Linux 验收通过后，以后不再连接显示器。
+
+操作窗口：头环本地终端。看到 orangepi@orangepicm5-tablet:~$ 后执行。
+
+Bash
+echo "=== 1 生成并校验 SSH 密钥 ==="
+sudo ssh-keygen -A
+sudo /usr/sbin/sshd -t
+
+echo
+echo "=== 2 启用 SSH ==="
+sudo systemctl reset-failed ssh
+sudo systemctl enable ssh
+sudo systemctl restart ssh
+echo -n "SSH："; systemctl is-enabled ssh; systemctl is-active ssh
+sudo ss -ltnp | grep ':22' || echo "SSH 22 端口未监听"
+
+echo
+echo "=== 3 启用四相机服务 ==="
+sudo systemctl enable seeker_cam_bridge.service
+sudo systemctl restart seeker_cam_bridge.service
+echo -n "相机服务："; systemctl is-enabled seeker_cam_bridge.service; systemctl is-active seeker_cam_bridge.service
+
+echo
+echo "=== 4 检查内置 SD 卡并创建 BAG 目录 ==="
+if findmnt -no SOURCE,TARGET,FSTYPE /media/orangepi/sdcard; then
+  mkdir -p /media/orangepi/sdcard/data/kalibr_bags
+  printf "Kalibr BAG directory ready\n" \
+    > /media/orangepi/sdcard/data/kalibr_bags/write_test.txt
+  sync
+  test -w /media/orangepi/sdcard/data/kalibr_bags \
+    && echo "BAG 目录：可写 PASS" \
+    || echo "BAG 目录：不可写 FAIL"
+else
+  echo "SD 卡未自动挂载：不能录制 BAG。"
+fi
+
+echo
+echo "=== 初始化检查结束 ==="
+
+
+
+
+
+说明：通过标准：SSH 为 enabled、active；相机服务为 enabled、active；BAG 目录显示“可写 PASS”。命令报错时先不要重启。
+
+操作窗口：头环本地终端。通过后执行重启。
+
+Plain Text
+sudo reboot
+
+
+
+
+
+说明：重启后拔掉显示器。下面开始全部在 Linux 工作站操作。
+
+二 Linux 日常采集流程
+
+1 发现当前头环 IP
+
+操作窗口：Linux 工作站终端。
+
+Plain Text
+sudo arp-scan --interface=eno1 192.168.10.0/24
+
+
+
+
+
+说明：记录 Realtek 设备的 IP。下文以 192.168.10.109 为例；若扫描结果不同，只替换黄色 IP。
+
+2 等待 SSH 就绪
+
+操作窗口：Linux 工作站终端。
+
+Plain Text
+for i in {1..18}; do
+  date '+%H:%M:%S'
+  nc -vz -w 3 192.168.10.109 22 && echo "SSH 22: PASS，可以远程操作" && break || echo "SSH 22: 等待头环开机"
+  sleep 10
+done
+
+
+
+
+
+说明：若扫描到 IP 但持续显示 Connection refused，说明该头环尚未完成“新头环首次初始化”。
+
+如果首次 SSH 出现 REMOTE HOST IDENTIFICATION HAS CHANGED，并且已确认旧头环不在网络中，执行：
+
+Plain Text
+ssh-keygen -f "/home/key/.ssh/known_hosts" -R "192.168.10.11"
+
+
+
+
+
+说明：再重新执行 SSH。新头环复用相同 IP 时，这是正常的主机密钥保护提示。
+
+3 检查四路相机
+
+操作窗口：Linux 工作站终端。
+
+Plain Text
+ssh orangepi@192.168.10.109 '
+source /opt/ros/noetic/setup.bash
+export ROS_MASTER_URI=http://localhost:11311
+systemctl is-active seeker_cam_bridge.service
+for TOPIC in /fisheye/left/image_raw/compressed /fisheye/right/image_raw/compressed /fisheye/bright/image_raw/compressed /fisheye/bleft/image_raw/compressed
+do
+  timeout 8 rostopic echo -n 1 "$TOPIC" >/dev/null && echo "PASS  $TOPIC" || echo "FAIL  $TOPIC"
+done
+'
+
+
+
+说明：必须显示 active 和四个 PASS。出现 FAIL，停止录制。
+
+3.1 SSH 提示“主机身份已改变”时处理
+
+操作窗口：Linux 工作站终端 key@key。
+
+**出现条件：**更换了新头环，但路由器又给它分配了旧 IP；SSH 出现 REMOTE HOST IDENTIFICATION HAS CHANGED。
+ **前提：**确认旧头环已经断开，只剩当前这台新头环接入网络。
+
+Plain Text
+ssh-keygen -f "/home/key/.ssh/known_hosts" -R "192.168.10.109"
+
+**注释：**删除 Linux 中保存的“旧头环 .109 的 SSH 身份记录”。
+ **每次需要修改：**仅把最后的 192.168.10.109 改成 arp-scan 扫描到的当前头环 IP。
+
+然后重新连接头环：
+
+Plain Text
+ssh orangepi@192.168.10.109
+
+**注释：**首次连接会询问是否信任新头环的身份密钥；确认当前只有这台头环在线后，输入 yes，再输入头环密码。成功进入后输入 exit 回到 Linux，即可继续执行四路相机检查。
+
+4 启动四路预览
+
+操作窗口：Linux 工作站终端 1。该窗口只用于预览。
+
+Plain Text
+cd /home/key/Downloads/headband_calibration_preview_relay_v1.10.4
+./run_temporary_four_preview.sh 192.168.10.109 192.168.10.10 balanced
+
+
+
+
+
+说明：浏览器打开 http://127.0.0.1:8766。采集结束后，在此预览终端按 Ctrl+C。预览只辅助观察，不代表 Kalibr 通过。
+
+5 录制正式 BAG
+
+操作窗口：Linux 工作站终端 2。先进入头环。
+
+Plain Text
+ssh -tt orangepi@192.168.10.109
+
+
+
+
+
+操作窗口：头环终端。看到 orangepi@orangepicm5-tablet:~$ 后执行。
+
+Plain Text
+BAG_NAME="camera_cs0001_1010_1600.bag"
+source /opt/ros/noetic/setup.bash
+export ROS_MASTER_URI=http://localhost:11311
+cd /media/orangepi/sdcard/data/kalibr_bags
+echo "开始录制：$(pwd)/$BAG_NAME"
+rosbag record -O "$BAG_NAME" /fisheye/left/image_raw/compressed /fisheye/right/image_raw/compressed /fisheye/bright/image_raw/compressed /fisheye/bleft/image_raw/compressed
+
+
+
+
+
+说明：只改黄色 BAG_NAME。完成采集后，在本窗口按 Ctrl+C；必须等待重新出现 orangepi@ 提示符，不能先断开 SSH。
+
+6 检查 BAG 并返回 Linux
+
+操作窗口：头环终端。录制正常结束后执行。
+
+Plain Text
+rosbag info /media/orangepi/sdcard/data/kalibr_bags/"$BAG_NAME"
+sync
+exit
+
+
+
+
+
+说明：rosbag info 应显示时长、四路 Topic 和相近消息数。exit 后提示符必须回到 key@key。
+
+7 复制 BAG 到 Linux
+
+操作窗口：Linux 工作站终端。禁止在 orangepi@ 提示符下执行。
+
+Plain Text
+BAG_NAME="camera_cs0001_1010_1600.bag"
+mkdir -p /home/key/文档/kalibr/data/cs-0001
+rsync -avP --partial orangepi@192.168.10.109:/media/orangepi/sdcard/data/kalibr_bags/"$BAG_NAME" /home/key/文档/kalibr/data/live_bags/
+
+
+
+
+
+8 校验复制结果
+
+操作窗口：Linux 工作站终端。
+
+Plain Text
+BAG_NAME="camera_cs0001_1010_1600.bag"
+ssh orangepi@192.168.10.109 "sha256sum /media/orangepi/sdcard/data/kalibr_bags/$BAG_NAME"
+sha256sum /home/key/文档/kalibr/data/live_bags/$BAG_NAME
+docker exec kalibr bash -lc "source /opt/ros/noetic/setup.bash && rosbag info /data/live_bags/$BAG_NAME"
+
+
+
+
+
+说明：两行 SHA256 必须完全相同，且容器内 rosbag info 能读取。
+
+9 运行 Kalibr 相机标定    #    每次二选一运行即可，推荐_DS_none版
+
+操作窗口：Linux 工作站终端。
+
+#运行 Kalibr 相机标定（DS_none版）
+
+Bash
+(
+set -Eeuo pipefail
+trap 'rc=$?; trap - EXIT; printf "\n脚本结束，退出码：%s\n" "$rc"; read -r -p "按回车关闭窗口..." _ || true; exit "$rc"' EXIT
+
+# ===== 每次测试新 BAG，只修改以下 3 行 =====
+DEVICE_DIR="cp-0001"  # 设备目录名，例如 cp-0002、cp-00016、cs-0001
+SOURCE_BAG="/home/key/文档/kalibr/data/cp-0001/camera/camera_cp0001_1011_2015.bag"  # 本次要测的第一步相机 BAG 完整路径
+BAG_FREQ_HZ="10.0"  # 抽帧频率；例如 10.0、5.0、2.0
+# ===========================================
+
+DATA_ROOT="/home/key/文档/kalibr/data"
+TEST_ROOT="$DATA_ROOT/model_eval_ds_camera_20261012"
+BAG_NAME="$(basename "$SOURCE_BAG")"
+SAMPLE_ID="${BAG_NAME%.bag}"
+RUN_TAG="ds-none_${BAG_FREQ_HZ}hz_$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_DIR="$TEST_ROOT/$DEVICE_DIR/$SAMPLE_ID/$RUN_TAG"
+RUN_DIR_INNER="/data/model_eval_ds_camera_20261012/$DEVICE_DIR/$SAMPLE_ID/$RUN_TAG"
+
+BASE_NAME="${BAG_NAME%.bag}"
+CAMCHAIN="$RUN_DIR/${BASE_NAME}-camchain.yaml"
+RESULTS_TXT="$RUN_DIR/${BASE_NAME}-results-cam.txt"
+REPORT_PDF="$RUN_DIR/${BASE_NAME}-report-cam.pdf"
+LOG_FILE="$RUN_DIR/run.log"
+METADATA="$RUN_DIR/run_metadata.txt"
+
+# 计时从粘贴执行命令后开始，包含复制、标定和结果检查
+TOTAL_START_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+TOTAL_START_SECONDS="$(date +%s)"
+
+if [[ ! -s "$SOURCE_BAG" ]]; then
+  echo "找不到 BAG 或文件为空：$SOURCE_BAG" >&2
+  exit 1
+fi
+
+if [[ "$(docker inspect -f '{{.State.Running}}' kalibr 2>/dev/null)" != "true" ]]; then
+  echo "Kalibr 容器 kalibr 未运行，请先启动容器。" >&2
+  exit 1
+fi
+
+if [[ -e "$RUN_DIR" ]]; then
+  echo "测试目录已存在，为避免覆盖而停止：$RUN_DIR" >&2
+  exit 2
+fi
+
+mkdir -p "$RUN_DIR"
+cp -v -- "$SOURCE_BAG" "$RUN_DIR/$BAG_NAME"
+
+SOURCE_SHA256="$(sha256sum "$SOURCE_BAG" | awk '{print $1}')"
+COPY_SHA256="$(sha256sum "$RUN_DIR/$BAG_NAME" | awk '{print $1}')"
+
+if [[ "$SOURCE_SHA256" != "$COPY_SHA256" ]]; then
+  echo "BAG 副本校验失败，SHA256 不一致，停止标定。" >&2
+  exit 3
+fi
+
+echo
+echo "第一步：DS 四路相机标定"
+echo "设备：$DEVICE_DIR"
+echo "BAG：$BAG_NAME"
+echo "抽帧频率：$BAG_FREQ_HZ Hz"
+echo "测试副本：$RUN_DIR/$BAG_NAME"
+echo "SHA256：$COPY_SHA256"
+echo "隔离输出目录：$RUN_DIR"
+echo "运行期间请勿关闭终端或按 Ctrl+C。"
+
+KALIBR_START_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+KALIBR_START_SECONDS="$(date +%s)"
+
+set +e
+docker exec \
+  -e BAG_NAME="$BAG_NAME" \
+  -e BAG_FREQ_HZ="$BAG_FREQ_HZ" \
+  -e RUN_DIR_INNER="$RUN_DIR_INNER" \
+  kalibr bash -lc '
+set -e
+source /opt/ros/noetic/setup.bash
+source /catkin_ws/devel/setup.bash
+unset KALIBR_MANUAL_FOCAL_LENGTH_INIT
+export MPLBACKEND=Agg
+unset DISPLAY
+cd "$RUN_DIR_INNER"
+
+rosrun kalibr kalibr_calibrate_cameras \
+  --target /data/april_6x6.yaml \
+  --models ds-none ds-none ds-none ds-none \
+  --topics \
+    /fisheye/left/image_raw/compressed \
+    /fisheye/right/image_raw/compressed \
+    /fisheye/bright/image_raw/compressed \
+    /fisheye/bleft/image_raw/compressed \
+  --bag "$RUN_DIR_INNER/$BAG_NAME" \
+  --bag-freq "$BAG_FREQ_HZ" \
+  --dont-show-report
+' 2>&1 | tee "$LOG_FILE"
+KALIBR_EXIT_CODE="${PIPESTATUS[0]}"
+set -e
+
+KALIBR_END_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+KALIBR_END_SECONDS="$(date +%s)"
+KALIBR_SECONDS="$((KALIBR_END_SECONDS - KALIBR_START_SECONDS))"
+
+CAMCHAIN_OK=no
+RESULTS_OK=no
+REPORT_OK=no
+[[ -s "$CAMCHAIN" ]] && CAMCHAIN_OK=yes
+[[ -s "$RESULTS_TXT" ]] && RESULTS_OK=yes
+[[ -s "$REPORT_PDF" ]] && REPORT_OK=yes
+
+if [[ "$KALIBR_EXIT_CODE" -eq 0 &&
+      "$CAMCHAIN_OK" == yes &&
+      "$RESULTS_OK" == yes &&
+      "$REPORT_OK" == yes ]]; then
+  STATUS=SUCCESS_COMPLETE
+else
+  STATUS=INCOMPLETE_OR_FAILED
+fi
+
+TOTAL_END_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+TOTAL_END_SECONDS="$(date +%s)"
+TOTAL_SECONDS="$((TOTAL_END_SECONDS - TOTAL_START_SECONDS))"
+
+{
+  printf 'step=step1_camera_calibration\n'
+  printf 'device_dir=%s\n' "$DEVICE_DIR"
+  printf 'sample_id=%s\n' "$SAMPLE_ID"
+  printf 'model=ds-none x4\n'
+  printf 'bag_frequency_hz=%s\n' "$BAG_FREQ_HZ"
+  printf 'source_bag=%s\n' "$SOURCE_BAG"
+  printf 'test_copy=%s/%s\n' "$RUN_DIR" "$BAG_NAME"
+  printf 'source_sha256=%s\n' "$SOURCE_SHA256"
+  printf 'copy_sha256=%s\n' "$COPY_SHA256"
+  printf 'total_start_utc=%s\n' "$TOTAL_START_UTC"
+  printf 'total_end_utc=%s\n' "$TOTAL_END_UTC"
+  printf 'total_wall_seconds=%s\n' "$TOTAL_SECONDS"
+  printf 'total_wall_minutes_seconds=%s分%s秒\n' \
+    "$((TOTAL_SECONDS / 60))" "$((TOTAL_SECONDS % 60))"
+  printf 'kalibr_start_utc=%s\n' "$KALIBR_START_UTC"
+  printf 'kalibr_end_utc=%s\n' "$KALIBR_END_UTC"
+  printf 'kalibr_wall_seconds=%s\n' "$KALIBR_SECONDS"
+  printf 'kalibr_wall_minutes_seconds=%s分%s秒\n' \
+    "$((KALIBR_SECONDS / 60))" "$((KALIBR_SECONDS % 60))"
+  printf 'kalibr_exit_code=%s\n' "$KALIBR_EXIT_CODE"
+  printf 'camchain_exists=%s\n' "$CAMCHAIN_OK"
+  printf 'results_exists=%s\n' "$RESULTS_OK"
+  printf 'report_exists=%s\n' "$REPORT_OK"
+  printf 'status=%s\n' "$STATUS"
+} | tee "$METADATA"
+
+echo
+echo "=== 本次测试文件 ==="
+ls -lh "$RUN_DIR"
+
+echo
+echo "状态：$STATUS"
+echo "测试目录：$RUN_DIR"
+echo "日志：$LOG_FILE"
+
+[[ "$STATUS" == SUCCESS_COMPLETE ]]
+)
+
+
+
+#运行 Kalibr 相机标定（pinhole-equi版)）
+
+Bash
+# 【每条新 BAG 只修改这一行】
+BAG_NAME="camera_cp00016_0922_1545.bag"
+
+# 自动生成对应机器目录：例如 cp-00016/camera
+CP_ID="$(printf '%s\n' "$BAG_NAME" | sed -E 's/^camera_cp([0-9]+)_.*/cp-\1/')"
+RESULT_DIR="/home/key/文档/kalibr/data/$CP_ID/camera"
+SOURCE_BAG="/home/key/文档/kalibr/data/live_bags/$BAG_NAME"
+
+# 首次标定：把已校验的 BAG 放入对应机器目录。
+# 同一 BAG 再次运行时，发现它已在目标目录，会直接复用。
+mkdir -p "$RESULT_DIR"
+
+if [ -f "$SOURCE_BAG" ]; then
+  mv -v "$SOURCE_BAG" "$RESULT_DIR/$BAG_NAME"
+elif [ -f "$RESULT_DIR/$BAG_NAME" ]; then
+  echo "复用已有 BAG：$RESULT_DIR/$BAG_NAME"
+else
+  echo "找不到 BAG：$SOURCE_BAG"
+  exit 1
+fi
+
+# 运行 Kalibr；自动焦距失败时，终端才会要求输入 556 后回车。
+docker exec \
+  -e BAG_NAME="$BAG_NAME" \
+  -e BAG_DIR="/data/$CP_ID/camera" \
+  -it kalibr bash -lc '
+set -e
+source /opt/ros/noetic/setup.bash
+source /catkin_ws/devel/setup.bash
+
+export KALIBR_MANUAL_FOCAL_LENGTH_INIT=1
+export MPLBACKEND=Agg
+unset DISPLAY
+
+cd "$BAG_DIR"
+
+rosrun kalibr kalibr_calibrate_cameras \
+  --target /data/april_6x6.yaml \
+  --models pinhole-equi pinhole-equi pinhole-equi pinhole-equi \
+  --topics \
+    /fisheye/left/image_raw/compressed \
+    /fisheye/right/image_raw/compressed \
+    /fisheye/bright/image_raw/compressed \
+    /fisheye/bleft/image_raw/compressed \
+  --bag "$BAG_DIR/$BAG_NAME" \
+  --bag-freq 10.0 \
+  --dont-show-report
+'
+
+
+
+
+
+
+
+
+
+说明：四路 Topic 顺序、AprilGrid YAML、四个 pinhole-equi 与 --bag-freq 10.0 为固定项。
+
+异常处理 仅在录制被意外中断时使用
+
+操作窗口：Linux 工作站终端。
+
+Plain Text
+ssh -tt orangepi@192.168.10.109 '
+source /opt/ros/noetic/setup.bash
+rosbag reindex /media/orangepi/sdcard/data/kalibr_bags/camera_cp0004_0920_1640.bag.active
+rosbag info /media/orangepi/sdcard/data/kalibr_bags/camera_cp0004_0920_1640.bag.active
+'
+
+
+
+
+
+说明：只在文件仍为 .bag.active 时使用。正式标定建议重新完整录制。
+
+
+
+
+
+三 附：头环三项标定流程
+
+
+
+
+
+
+
+四 附：camera_imu   DS验证命令
+
+
+Bash
+(
+set -Eeuo pipefail
+trap 'rc=$?; trap - EXIT; printf "\n脚本结束，退出码：%s\n" "$rc"; read -r -p "按回车关闭窗口..." _ || true; exit "$rc"' EXIT
+
+# ===== 每次使用时只修改以下 2 行 =====
+DEVICE_DIR="cs-0001"                                   # 设备目录，例如 cs-0001、cp-00016
+CAMERA_BAG_BASE="camera_cs0001_1010_1600"              # 第一步 BAG 名，不带 .bag；用于找到对应 camchain
+# ======================================
+
+DATA_ROOT="/home/key/文档/kalibr/data"
+CAMERA_IMU_DIR="$DATA_ROOT/$DEVICE_DIR/camera_imu"
+
+# 第一步相机标定结果、第二步 IMU 配置、标定板
+CAMCHAIN="$DATA_ROOT/$DEVICE_DIR/camera/${CAMERA_BAG_BASE}-camchain.yaml"
+IMU_YAML="$DATA_ROOT/$DEVICE_DIR/imu/imu.yaml"
+TARGET="$DATA_ROOT/april_6x6.yaml"
+
+# 自动识别第三步动态 BAG；必须恰好有一个 camera_imu*.bag
+mapfile -t CAMERA_IMU_BAGS < <(
+  find "$CAMERA_IMU_DIR" -maxdepth 1 -type f \
+    -name 'camera_imu*.bag' ! -name '*.orig.bag' -print | sort
+)
+
+if [[ "${#CAMERA_IMU_BAGS[@]}" -eq 0 ]]; then
+  echo "没有找到第三步 Camera-IMU BAG，当前不能运行联合标定。" >&2
+  echo "请先录制 BAG 并放入：$CAMERA_IMU_DIR" >&2
+  exit 1
+elif [[ "${#CAMERA_IMU_BAGS[@]}" -gt 1 ]]; then
+  echo "找到多个 Camera-IMU BAG，请先确认本次要使用的文件：" >&2
+  printf '  %s\n' "${CAMERA_IMU_BAGS[@]}" >&2
+  exit 2
+fi
+
+SOURCE_BAG="${CAMERA_IMU_BAGS[0]}"
+BAG_NAME="$(basename "$SOURCE_BAG")"
+BAG_BASE="${BAG_NAME%.bag}"
+
+# 所有输出进入独立测试目录，不覆盖第一步、第二步或已有第三步结果
+RUN_TAG="ds_camera_imu_5hz_$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_DIR="$CAMERA_IMU_DIR/ds_joint_tests/$RUN_TAG"
+RUN_DIR_INNER="/data/$DEVICE_DIR/camera_imu/ds_joint_tests/$RUN_TAG"
+
+CAMCHAIN_INNER="/data/$DEVICE_DIR/camera/${CAMERA_BAG_BASE}-camchain.yaml"
+IMU_INNER="/data/$DEVICE_DIR/imu/imu.yaml"
+TARGET_INNER="/data/april_6x6.yaml"
+BAG_INNER="$RUN_DIR_INNER/$BAG_NAME"
+
+CAMCHAIN_OUT="$RUN_DIR/${BAG_BASE}-camchain-imucam.yaml"
+IMU_OUT="$RUN_DIR/${BAG_BASE}-imu.yaml"
+RESULTS_OUT="$RUN_DIR/${BAG_BASE}-results-imucam.txt"
+REPORT_OUT="$RUN_DIR/${BAG_BASE}-report-imucam.pdf"
+LOG_FILE="$RUN_DIR/run.log"
+BAG_INFO="$RUN_DIR/bag_info.txt"
+METADATA="$RUN_DIR/run_metadata.txt"
+
+TOTAL_START_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+TOTAL_START_SECONDS="$(date +%s)"
+
+for FILE in "$CAMCHAIN" "$IMU_YAML" "$TARGET" "$SOURCE_BAG"; do
+  if [[ ! -s "$FILE" ]]; then
+    echo "文件不存在或为空，停止：$FILE" >&2
+    exit 1
+  fi
+done
+
+DS_CAM_COUNT="$(grep -Ec '^[[:space:]]*camera_model:[[:space:]]*ds[[:space:]]*$' "$CAMCHAIN" || true)"
+if [[ "$DS_CAM_COUNT" -ne 4 ]]; then
+  echo "相机链中 DS 相机数量为 $DS_CAM_COUNT（预期 4），停止。" >&2
+  echo "相机链：$CAMCHAIN" >&2
+  exit 1
+fi
+
+if [[ "$(docker inspect -f '{{.State.Running}}' kalibr 2>/dev/null)" != "true" ]]; then
+  echo "Kalibr 容器 kalibr 未运行，请先启动容器。" >&2
+  exit 1
+fi
+
+if [[ -e "$RUN_DIR" ]]; then
+  echo "测试目录已存在，为避免覆盖而停止：$RUN_DIR" >&2
+  exit 2
+fi
+
+mkdir -p "$RUN_DIR"
+cp -v -- "$SOURCE_BAG" "$RUN_DIR/$BAG_NAME"
+
+SOURCE_SHA256="$(sha256sum "$SOURCE_BAG" | awk '{print $1}')"
+COPY_SHA256="$(sha256sum "$RUN_DIR/$BAG_NAME" | awk '{print $1}')"
+if [[ "$SOURCE_SHA256" != "$COPY_SHA256" ]]; then
+  echo "BAG 副本 SHA256 校验失败，停止。" >&2
+  exit 3
+fi
+
+# 先确认副本可读且包含四路压缩图像与 IMU topic
+set +e
+docker exec \
+  -e BAG_INNER="$BAG_INNER" \
+  kalibr bash -lc '
+source /opt/ros/noetic/setup.bash
+rosbag info "$BAG_INNER"
+' 2>&1 | tee "$BAG_INFO"
+BAG_INFO_EXIT_CODE="${PIPESTATUS[0]}"
+set -e
+
+if [[ "$BAG_INFO_EXIT_CODE" -ne 0 ]]; then
+  echo "rosbag info 无法读取 BAG；尚未启动联合标定。" >&2
+  exit 4
+fi
+
+for TOPIC in \
+  /fisheye/left/image_raw/compressed \
+  /fisheye/right/image_raw/compressed \
+  /fisheye/bright/image_raw/compressed \
+  /fisheye/bleft/image_raw/compressed \
+  /imu_data_raw
+do
+  if ! grep -Fq "$TOPIC" "$BAG_INFO"; then
+    echo "BAG 缺少所需 topic：$TOPIC；尚未启动联合标定。" >&2
+    exit 5
+  fi
+done
+
+echo
+echo "第三步：DS Camera-IMU 联合标定"
+echo "设备目录：$DEVICE_DIR"
+echo "第一步相机链：$CAMCHAIN"
+echo "第二步 IMU 配置：$IMU_YAML"
+echo "第三步动态 BAG：$SOURCE_BAG"
+echo "抽帧频率：5.0 Hz（原文档参数）"
+echo "时间偏移：Kalibr 默认范围"
+echo "独立输出目录：$RUN_DIR"
+echo "运行期间请勿关闭终端或按 Ctrl+C。"
+
+KALIBR_START_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+KALIBR_START_SECONDS="$(date +%s)"
+
+set +e
+docker exec \
+  -e BAG_INNER="$BAG_INNER" \
+  -e CAMCHAIN_INNER="$CAMCHAIN_INNER" \
+  -e IMU_INNER="$IMU_INNER" \
+  -e TARGET_INNER="$TARGET_INNER" \
+  -e RUN_DIR_INNER="$RUN_DIR_INNER" \
+  kalibr bash -lc '
+set -e
+source /opt/ros/noetic/setup.bash
+source /catkin_ws/devel/setup.bash
+export MPLBACKEND=Agg
+unset DISPLAY
+cd "$RUN_DIR_INNER"
+
+rosrun kalibr kalibr_calibrate_imu_camera \
+  --target "$TARGET_INNER" \
+  --imu "$IMU_INNER" \
+  --cams "$CAMCHAIN_INNER" \
+  --bag "$BAG_INNER" \
+  --bag-freq 5.0
+' 2>&1 | tee "$LOG_FILE"
+KALIBR_EXIT_CODE="${PIPESTATUS[0]}"
+set -e
+
+KALIBR_END_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+KALIBR_SECONDS="$(( $(date +%s) - KALIBR_START_SECONDS ))"
+
+CAMCHAIN_OK=no
+IMU_OUT_OK=no
+RESULTS_OK=no
+REPORT_OK=no
+[[ -s "$CAMCHAIN_OUT" ]] && CAMCHAIN_OK=yes
+[[ -s "$IMU_OUT" ]] && IMU_OUT_OK=yes
+[[ -s "$RESULTS_OUT" ]] && RESULTS_OK=yes
+[[ -s "$REPORT_OUT" ]] && REPORT_OK=yes
+
+if [[ "$KALIBR_EXIT_CODE" -eq 0 &&
+      "$CAMCHAIN_OK" == yes &&
+      "$IMU_OUT_OK" == yes &&
+      "$RESULTS_OK" == yes &&
+      "$REPORT_OK" == yes ]]; then
+  STATUS=SUCCESS_COMPLETE
+else
+  STATUS=INCOMPLETE_OR_FAILED
+fi
+
+TOTAL_END_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+TOTAL_SECONDS="$(( $(date +%s) - TOTAL_START_SECONDS ))"
+
+{
+  printf 'step=step3_camera_imu_joint_calibration\n'
+  printf 'device_dir=%s\n' "$DEVICE_DIR"
+  printf 'camera_bag_base=%s\n' "$CAMERA_BAG_BASE"
+  printf 'camera_model_source=step1_camchain_DS_x4\n'
+  printf 'camera_imu_bag=%s\n' "$SOURCE_BAG"
+  printf 'bag_frequency_hz=5.0\n'
+  printf 'timeoffset_padding=Kalibr_default\n'
+  printf 'bag_sha256=%s\n' "$COPY_SHA256"
+  printf 'total_start_utc=%s\n' "$TOTAL_START_UTC"
+  printf 'total_end_utc=%s\n' "$TOTAL_END_UTC"
+  printf 'total_wall_seconds=%s\n' "$TOTAL_SECONDS"
+  printf 'total_wall_minutes_seconds=%s分%s秒\n' \
+    "$((TOTAL_SECONDS / 60))" "$((TOTAL_SECONDS % 60))"
+  printf 'kalibr_start_utc=%s\n' "$KALIBR_START_UTC"
+  printf 'kalibr_end_utc=%s\n' "$KALIBR_END_UTC"
+  printf 'kalibr_wall_seconds=%s\n' "$KALIBR_SECONDS"
+  printf 'kalibr_exit_code=%s\n' "$KALIBR_EXIT_CODE"
+  printf 'camchain_imucam_exists=%s\n' "$CAMCHAIN_OK"
+  printf 'imu_output_exists=%s\n' "$IMU_OUT_OK"
+  printf 'results_imucam_exists=%s\n' "$RESULTS_OK"
+  printf 'report_imucam_exists=%s\n' "$REPORT_OK"
+  printf 'completion_status=%s\n' "$STATUS"
+} | tee "$METADATA"
+
+echo
+echo "=== 本次测试文件 ==="
+ls -lh "$RUN_DIR"
+
+echo
+echo "状态：$STATUS"
+echo "结果目录：$RUN_DIR"
+
+[[ "$STATUS" == SUCCESS_COMPLETE ]]
+)
+
