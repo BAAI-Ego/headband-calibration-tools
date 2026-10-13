@@ -19,55 +19,117 @@ Collection assistance for four fisheye cameras, based on preview source v1.10.4.
 
 Use the **Code** tab to browse these folders. Use **Releases** on the right to download the full deployment package. The daily guide covers collection and Kalibr operation; this README covers installation and use of the preview assistant.
 
-## Download
+## Before you start: what to obtain
 
-This Git folder contains the source, configuration, helper scripts, and documentation. It does **not** contain the Docker image.
+| Item | Where | Purpose |
+|---|---|---|
+| This repository's `main` branch | **Code** tab or the clone command below | Current guides, daily workflow, preview source and helper scripts |
+| Full `.tar` and matching `.tar.sha256` | [v1.10.4 Release Assets](https://github.com/BAAI-Ego/headband-calibration-tools/releases/tag/v1.10.4) | Approximately 1.5 GiB Kalibr Docker image and download verification |
 
-For deployment, download these two attachments from the [full deployment release](https://github.com/BAAI-Ego/headband-calibration-tools/releases/tag/v1.10.4):
+Get both items. GitHub's automatic **Source code ZIP omits the image**. This is a private repository; your account needs read access. Follow the numbered sections on a **Linux workstation** unless a command explicitly says headband terminal. Each comment describes the command immediately below it. Stop and resolve any failed step before proceeding.
 
-- `headband-calibration-assistant-v1.10.4-full.tar` — approximately 1.6 GB; source, Docker environment, configuration, and deployment README in one package.
-- `headband-calibration-assistant-v1.10.4-full.tar.sha256` — checksum of the full package.
+## Step 1: Prepare the workstation
 
-The full package is distributed as a Release attachment because the environment image is too large for a normal Git commit. Downloading GitHub's automatically generated source archive does not include this image. The v1.10.4 release is published; use the exact asset names above.
-
-## 1 Verify and extract
-
-Linux workstation, in the directory containing both downloaded attachments:
+Use Ubuntu/Debian x86_64 with network access. Allow roughly 20 GB for download, extraction and Docker image layers. The headband must already have its original camera drivers and ROS environment.
 
 ```bash
+# Workstation: verify x86_64 (the image is linux/amd64).
+uname -m
+# Workstation: inspect space; allow roughly 20 GB for archive, extraction and image layers.
+df -h "$HOME" /var/lib
+# Workstation: update the package index.
+sudo apt-get update
+# Workstation: install Git, GitHub CLI, SSH and network utilities.
+sudo apt-get install -y git gh openssh-client python3 unzip rsync arp-scan netcat-openbsd
+```
+
+## Step 2: Clone the main branch
+
+Sign in to `gh` for this private repository if needed. Do not overwrite an existing clone.
+
+```bash
+# Workstation: check login; if signed out, run the interactive command below.
+gh auth status
+```
+
+Only if the check reports that you are signed out:
+
+```bash
+# Workstation: authorize GitHub CLI in the browser.
+gh auth login
+```
+
+Then continue:
+
+```bash
+# Workstation: enter your home directory; do not overwrite an existing clone.
+cd "$HOME"
+# Workstation: clone the main branch of the dedicated repository.
+gh repo clone BAAI-Ego/headband-calibration-tools -- --branch main
+# Workstation: enter the source directory.
+cd "$HOME/headband-calibration-tools"
+# Workstation: confirm the main branch.
+git branch --show-current
+# Workstation: check that both guides are in the repository root.
+ls -l README.md README.zh-CN.md
+```
+
+If `~/headband-calibration-tools` already exists, inspect `git status` there and use `git pull --ff-only` only after confirming it has no local changes.
+
+## Step 3: Download and verify the image assets
+
+Download both assets from the Release; the source is already cloned in step 2. The commands below can be used instead of clicking Assets in the browser.
+
+```bash
+# Workstation: create a separate download directory.
+mkdir -p "$HOME/Downloads/headband-v1.10.4"
+# Workstation: download both release assets into it.
+gh release download v1.10.4 --repo BAAI-Ego/headband-calibration-tools --dir "$HOME/Downloads/headband-v1.10.4" --pattern 'headband-calibration-assistant-v1.10.4-full.tar*'
+# Workstation: enter the download directory.
+cd "$HOME/Downloads/headband-v1.10.4"
+# Workstation: check both asset names and sizes.
+ls -lh headband-calibration-assistant-v1.10.4-full.tar*
+# Workstation: verify the tar checksum; stop on mismatch.
 sha256sum -c headband-calibration-assistant-v1.10.4-full.tar.sha256
+# Workstation: extract into this directory; check before proceeding if the folder already exists.
 tar -xf headband-calibration-assistant-v1.10.4-full.tar
+# Workstation: verify all internal files, including the image archive.
 cd headband-calibration-assistant-v1.10.4-full
 sha256sum -c SHA256SUMS
 ```
 
-Use an empty extraction directory to avoid overwriting previous files.
+The assets are `headband-calibration-assistant-v1.10.4-full.tar` and `.tar.sha256`. The archive is a release snapshot and its bundled README has older filenames. **Use the current README and operator guide from the cloned `main` branch.** The archive provides `environment/kalibr-environment.tar.gz` for import.
 
-## 2 Prepare the workstation
+## Step 4: Install Docker and import the Kalibr image
 
-Linux amd64 workstation with Docker access is required. On Ubuntu/Debian, install the following only if Docker has not already been installed; do not replace an existing Docker installation.
+Keep an existing Docker installation. Resolve `docker info` permission errors with the workstation administrator and log in again before proceeding. If `kalibr:noetic` already points to a different image, investigate before changing its tag.
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y docker.io openssh-client python3 unzip rsync arp-scan netcat-openbsd
-sudo systemctl start docker
-# The current user must be able to run Docker; ask the administrator to configure access if needed.
+# Workstation: install and start docker.io only when Docker is absent; do not mix it with Docker CE.
+if ! command -v docker >/dev/null; then sudo apt-get install -y docker.io; sudo systemctl start docker; fi
+# Workstation: confirm the current user can use Docker directly.
 docker info
-```
-
-The host does not need a separate ROS installation. Before importing, check whether `kalibr:noetic` already exists and compare image identity; loading the package can replace that tag.
-
-```bash
-cd environment
-sha256sum -c SHA256SUMS
-docker load -i kalibr-environment.tar.gz
-cd ..
+# Workstation: inspect any existing tag; a missing-image error is acceptable, but stop if the ID differs.
+docker image inspect kalibr:noetic --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+# Workstation: inspect the expected image identity and platform.
+cat environment/image-id-platform.txt
+# Workstation: verify the image archive again.
+(cd environment && sha256sum -c SHA256SUMS)
+# Workstation: import only after resolving any different pre-existing kalibr:noetic tag.
+docker load -i environment/kalibr-environment.tar.gz
+# Workstation: confirm the imported image identity and platform.
+docker image inspect kalibr:noetic --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+# Workstation: return to the current source repository.
+cd "$HOME/headband-calibration-tools"
+# Workstation: check local dependencies without connecting to the headband.
 bash tools/check_preview_environment.sh
 ```
 
-Expected check result: `DEPENDENCIES_PASS`.
+Expected image ID: `sha256:ddbe45d2bd03e8a415688355dc23c4ceedf6eb576e1c6d7eeafa51567fa10b29`, platform `linux/amd64`. Expected dependency result: `DEPENDENCIES_PASS`. The administrator should decide whether to grant Docker group access, which carries elevated privileges. No host ROS install is needed; do not replace compiled Kalibr bindings with pip.
 
-## 3 Find and check the headband
+Next, follow step 5 to identify the actual headband IP and inspect all four image topics, then run a 60-second preview in step 6. The SSH relay adds load; it does not start the original BAG recording.
+
+## Step 5: Find and check the headband
 
 The headband must already have ROS Noetic, OpenCV, NumPy, and the original four-camera service/driver. This package does not install headband firmware. Connect one headband at a time. Replace the interface, subnet, and IP below with actual values.
 
@@ -95,7 +157,7 @@ exit
 
 All four topics must pass. The checks briefly subscribe to image messages and add temporary load. SSH connectivity alone does not prove bidirectional ROS connectivity.
 
-## 4 Start the assistant
+## Step 6: Start the assistant
 
 Linux workstation, full package root:
 
@@ -111,7 +173,7 @@ Starting the assistant runs a temporary Python relay on the headband over SSH, s
 
 Verify the physical target before use. `preview/config/april_6x6.yaml` is a reference: 6×6 tags, tagSize 0.088 m, tagSpacing 0.3. Do not overwrite historical or production configurations.
 
-## 5 Stop and package the report
+## Step 7: Stop and package the report
 
 Press Ctrl+C in the preview terminal and wait for exit. After the report is saved:
 
